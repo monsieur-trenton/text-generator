@@ -1,3 +1,3 @@
 export default {
-    base: '/gap-fill-app',
+    base: '/text-generator/',
 }
