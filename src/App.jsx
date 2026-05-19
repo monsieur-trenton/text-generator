@@ -45,8 +45,8 @@ function Toggle({ label, note, checked, onChange }) {
 function GapBlank({ answer, num, color }) {
   const underscores = "_".repeat(Math.max(8, (answer||"").length + 4));
   return (
-    <span style={{ display:"inline-flex",alignItems:"baseline",gap:2,margin:"0 1px",whiteSpace:"nowrap" }}>
-      <sup style={{ fontSize:"0.6em",fontWeight:700,color,fontFamily:"sans-serif",lineHeight:1 }}>{num}</sup>
+    <span style={{ display:"inline-flex",alignItems:"baseline",gap:3,margin:"0 2px",whiteSpace:"nowrap" }}>
+      <span style={{ fontSize:"0.8em",fontWeight:700,color,fontFamily:"sans-serif" }}>{num})</span>
       <span style={{ fontFamily:"monospace",letterSpacing:"0.04em",fontSize:"0.95em" }}>{underscores}</span>
     </span>
   );
@@ -60,7 +60,7 @@ function toMMDD(dateStr) {
 
 function makeTitle(examDate, version) {
   const mmdd = toMMDD(examDate);
-  const versionLabel = version ? `. Version ${version}` : "";
+  const versionLabel = version || "";
   return mmdd ? `Vocabulaire - ${mmdd}${versionLabel}` : `Vocabulaire${versionLabel}`;
 }
 
@@ -153,9 +153,9 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
             <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
               Banque de mots — {activity.wordBank.length} mots
             </div>
-            <div style={{ display:"flex",flexWrap:"wrap",gap:7 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"4px 12px" }}>
               {activity.wordBank.map((w,i)=>(
-                <span key={i} style={{ fontSize:13,padding:"2px 11px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal" }}>
+                <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                   {w.word}
                   {w.isInfinitive && <span style={{ fontSize:9,verticalAlign:"super",marginLeft:2,fontFamily:"sans-serif",color:"var(--color-text-tertiary)" }}>inf.</span>}
                 </span>
@@ -281,7 +281,7 @@ export default function App() {
   const [poolSize,    setPoolSize]    = useState(10);
   const [articleMode, setArticleMode] = useState(false);
   const [verbMode,    setVerbMode]    = useState(false);
-  const [contextMode, setContextMode] = useState(false);
+  const [contextLevel, setContextLevel] = useState(0);
   const [twoVersions, setTwoVersions] = useState(false);
   const [examDate,    setExamDate]    = useState("");
   const [activities,  setActivities]  = useState(null);
@@ -354,18 +354,26 @@ ${twoVersions ? `{
       try { parsed = JSON.parse(extractJSON(raw)); }
       catch { console.error("Unparseable response:", raw); throw new Error("Could not parse the generated activity. Please try again."); }
 
+      const contextLevelDescs = [
+        "",
+        "one full proficiency level below the exercise level — very simple sentences, high-frequency vocabulary only",
+        "about half a proficiency level below — mostly familiar structures with occasional new vocabulary",
+        "slightly below the exercise level — accessible but approaching the same register",
+        "at exactly the same proficiency level as the exercise",
+      ];
+
       let context = null;
-      if (contextMode) {
+      if (contextLevel > 0) {
         setLoadingMsg("Generating mise en contexte…");
         const ctxRaw = await callAI(
           `Create a "Mise en contexte" block in French for a gap-fill exercise. Topic: "${topic}". Exercise level: ${instr}. Text: "${parsed.text}".
 Write:
-1. "intro": 2–3 sentences in French at ${getPriorLevel(framework,level)} level introducing the topic without revealing gap answers.
+1. "intro": 2–3 sentences in French written at a level that is ${contextLevelDescs[contextLevel]} — do NOT reveal gap answers.
 2. "glossary": 4–6 items — difficult words from the text, each with a short French definition (not a translation).
 Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}`,
           "JSON-only. No markdown.", 800
         );
-        try { context = JSON.parse(ctxRaw.replace(/```json|```/g,"").trim()); }
+        try { context = JSON.parse(extractJSON(ctxRaw)); }
         catch { context = null; }
       }
 
@@ -529,10 +537,22 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
               </div>
             </div>
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10 }}>
-            <Toggle label="Article challenge"     note="Gaps omit the determiner"         checked={articleMode} onChange={v=>{setArticleMode(v);setActivities(null);}}/>
-            <Toggle label="Conjugation challenge" note="Word bank shows infinitives"       checked={verbMode}    onChange={v=>{setVerbMode(v);setActivities(null);}}/>
-            <Toggle label="Contextualisation"     note="Adds mise en contexte + glossary"  checked={contextMode} onChange={v=>{setContextMode(v);setActivities(null);}}/>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
+            <Toggle label="Article challenge"     note="Gaps omit the determiner"   checked={articleMode} onChange={v=>{setArticleMode(v);setActivities(null);}}/>
+            <Toggle label="Conjugation challenge" note="Word bank shows infinitives" checked={verbMode}    onChange={v=>{setVerbMode(v);setActivities(null);}}/>
+          </div>
+          <div>
+            <div style={{ fontSize:12,color:"var(--color-text-secondary)",marginBottom:7,fontWeight:500,display:"flex",justifyContent:"space-between" }}>
+              <span>Contextualisation</span>
+              <span style={{ fontSize:12,fontWeight:600,color:contextLevel===0?"var(--color-text-tertiary)":fw.color }}>
+                {["Off","~1 level below","½ level below","Slightly below","On level"][contextLevel]}
+              </span>
+            </div>
+            <input type="range" min={0} max={4} step={1} value={contextLevel}
+              onChange={e=>{setContextLevel(+e.target.value);setActivities(null);}} style={{ width:"100%" }}/>
+            <div style={{ display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--color-text-tertiary)",marginTop:3 }}>
+              <span>Off</span><span>On level</span>
+            </div>
           </div>
         </div>
 
