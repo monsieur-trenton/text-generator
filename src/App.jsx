@@ -374,7 +374,7 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
 
       const makeActivity = async (gaps, label) => {
         setLoadingMsg(`Building ${label ? "Version "+label : "activity"}…`);
-        const wordBank = await buildWordBank(gaps, poolSize, layout, framework, level, verbMode, articleMode, callClaude);
+        const wordBank = await buildWordBank(gaps, poolSize, layout, framework, level, verbMode, articleMode, callAI);
         return {
           fullText: parsed.text,
           gaps,
