@@ -291,18 +291,21 @@ export default function App() {
   const fw = FRAMEWORKS[framework];
 
   const callAI = async (userPrompt, system, maxTokens=2000) => {
-    const body = {
-      contents: [{ role:"user", parts:[{ text:userPrompt }] }],
-      generationConfig: { maxOutputTokens:maxTokens },
-    };
-    if (system) body.systemInstruction = { parts:[{ text:system }] };
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
-      { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) }
-    );
+    const body = { model:"claude-haiku-4-5-20251001", max_tokens:maxTokens, messages:[{ role:"user", content:userPrompt }] };
+    if (system) body.system = system;
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body:JSON.stringify(body),
+    });
     const data = await res.json();
-    if (data.error) throw new Error(`Gemini API error: ${data.error.message}`);
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
+    if (data.error) throw new Error(`Claude API error: ${data.error.message}`);
+    return data.content?.[0]?.text?.trim()||"";
   };
 
   const generate = async () => {
@@ -417,12 +420,12 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
             <div style={{ fontSize:20,fontWeight:500 }}>Gap-fill activity builder</div>
           </div>
           <div style={{ display:"flex",gap:6 }}>
-            <Tag color="#1a73e8">Gemini</Tag>
+            <Tag color="#c0392b">Claude</Tag>
             <Tag color="#e67e22">CamemBERT logic</Tag>
           </div>
         </div>
 
-        <Alert>Preview mode — Gemini handles text and distractor logic. The GitHub Pages version calls CamemBERT directly.</Alert>
+        <Alert>Preview mode — Claude handles text and distractor logic. The GitHub Pages version calls CamemBERT directly.</Alert>
 
         {/* Framework */}
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
