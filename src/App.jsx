@@ -219,6 +219,18 @@ function printSheet(title) {
   w.document.close(); setTimeout(()=>{w.focus();w.print();},400);
 }
 
+function extractJSON(raw) {
+  let text = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const start = Math.min(
+    text.indexOf("{") === -1 ? Infinity : text.indexOf("{"),
+    text.indexOf("[") === -1 ? Infinity : text.indexOf("["),
+  );
+  if (start === Infinity) return text;
+  const endChar = text[start] === "{" ? "}" : "]";
+  const end = text.lastIndexOf(endChar);
+  return end === -1 ? text : text.slice(start, end + 1);
+}
+
 function getPriorLevel(framework, level) {
   const levels = FRAMEWORKS[framework].levels;
   const idx = levels.indexOf(level);
@@ -253,7 +265,7 @@ async function buildWordBank(gaps, poolSize, layout, framework, level, verbMode,
       "JSON-only. No markdown.",
       400
     );
-    try { extraWords = JSON.parse(raw.replace(/```json|```/g,"").trim()).slice(0,extra).map(w=>({ word:w,isInfinitive:false })); }
+    try { extraWords = JSON.parse(extractJSON(raw)).slice(0,extra).map(w=>({ word:w,isInfinitive:false })); }
     catch { extraWords = []; }
   }
   return [...correctEntries,...extraWords].sort(()=>Math.random()-0.5);
@@ -334,8 +346,8 @@ ${twoVersions ? `{
 
       const raw = await callAI(gapPrompt, "JSON-only responder. No markdown, no explanation.", 3000);
       let parsed;
-      try { parsed = JSON.parse(raw.replace(/```json|```/g,"").trim()); }
-      catch { throw new Error("Could not parse the generated activity. Please try again."); }
+      try { parsed = JSON.parse(extractJSON(raw)); }
+      catch { console.error("Unparseable response:", raw); throw new Error("Could not parse the generated activity. Please try again."); }
 
       let context = null;
       if (contextMode) {
