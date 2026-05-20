@@ -42,12 +42,12 @@ function Toggle({ label, note, checked, onChange }) {
     </div>
   );
 }
-function GapBlank({ answer, num, color }) {
+function GapBlank({ answer, num }) {
   const underscores = "_".repeat(Math.max(8, (answer||"").length + 4));
   return (
-    <span style={{ display:"inline-flex",alignItems:"baseline",gap:3,margin:"0 2px",whiteSpace:"nowrap" }}>
-      <span style={{ fontSize:"0.8em",fontWeight:700,color,fontFamily:"sans-serif" }}>{num})</span>
-      <span style={{ fontFamily:"monospace",letterSpacing:"0.04em",fontSize:"0.95em" }}>{underscores}</span>
+    <span style={{ display:"inline-flex",alignItems:"baseline",gap:2,margin:"0 2px",whiteSpace:"nowrap" }}>
+      <span>{num})</span>
+      <span style={{ fontFamily:"monospace",letterSpacing:"0.04em" }}>{underscores}</span>
     </span>
   );
 }
@@ -153,7 +153,7 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
             <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
               Banque de mots — {activity.wordBank.length} mots
             </div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"4px 12px" }}>
+            <div style={{ display:"grid",gridAutoFlow:"column",gridTemplateRows:"repeat(5,auto)",gridAutoColumns:"1fr",gap:"4px 16px" }}>
               {activity.wordBank.map((w,i)=>(
                 <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                   {w.word}
@@ -176,7 +176,7 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
           {activity.segments.map((seg,i)=>
             seg.type==="text"
               ? <span key={i}>{seg.value}</span>
-              : <GapBlank key={i} answer={seg.answer} num={seg.num} color={fwColor}/>
+              : <GapBlank key={i} answer={seg.answer} num={seg.num}/>
           )}
         </div>
 
@@ -242,11 +242,17 @@ function buildSegments(text, gaps) {
   const segments = [];
   let n = 1;
   for (const gap of gaps) {
-    const idx = remaining.indexOf(gap.original);
-    if (idx===-1) continue;
-    if (idx>0) segments.push({ type:"text",value:remaining.slice(0,idx) });
+    const needle = gap.original || gap.answer;
+    if (!needle) continue;
+    let idx = remaining.indexOf(needle);
+    let matchLen = needle.length;
+    if (idx === -1) {
+      idx = remaining.toLowerCase().indexOf(needle.toLowerCase());
+    }
+    if (idx === -1) continue;
+    if (idx > 0) segments.push({ type:"text",value:remaining.slice(0,idx) });
     segments.push({ type:"gap",num:n++,answer:gap.answer });
-    remaining = remaining.slice(idx+gap.original.length);
+    remaining = remaining.slice(idx+matchLen);
   }
   if (remaining) segments.push({ type:"text",value:remaining });
   return segments;
