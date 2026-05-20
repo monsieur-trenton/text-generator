@@ -44,8 +44,8 @@ function Toggle({ label, note, checked, onChange }) {
 }
 function GapBlank({ num }) {
   return (
-    <span style={{ display:"inline-flex",alignItems:"baseline",gap:2,margin:"0 2px",whiteSpace:"nowrap" }}>
-      <span>{num})</span>
+    <span style={{ margin:"0 3px",whiteSpace:"nowrap" }}>
+      <span style={{ fontFamily:"sans-serif",fontSize:"0.85em",fontWeight:600 }}>{num})</span>
       <span style={{ fontFamily:"monospace",letterSpacing:"0.04em" }}>{"_".repeat(15)}</span>
     </span>
   );
@@ -153,13 +153,12 @@ function Sheet({ activity, framework, level, layout, examDate, version, generati
           const flatBank = activity.wordBank.flatMap(w =>
             w.word.split(/,\s*/).map(t => t.trim()).filter(Boolean).map(t => ({ ...w, word:t }))
           );
-          const colRows = Math.ceil(flatBank.length / 2);
           return (
             <div style={{ background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,border:"0.5px solid var(--color-border-tertiary)" }}>
               <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
                 Banque de mots — {flatBank.length} mots
               </div>
-              <div style={{ display:"grid",gridAutoFlow:"column",gridTemplateRows:`repeat(${colRows},auto)`,gridAutoColumns:"1fr",gap:"4px 16px" }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px" }}>
                 {flatBank.map((w,i)=>(
                   <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                     {w.word}
