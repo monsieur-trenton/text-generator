@@ -42,12 +42,11 @@ function Toggle({ label, note, checked, onChange }) {
     </div>
   );
 }
-function GapBlank({ answer, num }) {
-  const underscores = "_".repeat(Math.max(8, (answer||"").length + 4));
+function GapBlank({ num }) {
   return (
     <span style={{ display:"inline-flex",alignItems:"baseline",gap:2,margin:"0 2px",whiteSpace:"nowrap" }}>
       <span>{num})</span>
-      <span style={{ fontFamily:"monospace",letterSpacing:"0.04em" }}>{underscores}</span>
+      <span style={{ fontFamily:"monospace",letterSpacing:"0.04em" }}>{"_".repeat(15)}</span>
     </span>
   );
 }
@@ -61,12 +60,14 @@ function toMMDD(dateStr) {
 function makeTitle(examDate, version) {
   const mmdd = toMMDD(examDate);
   const versionLabel = version || "";
-  return mmdd ? `Vocabulaire - ${mmdd}${versionLabel}` : `Vocabulaire${versionLabel}`;
+  if (mmdd) return `Vocabulaire - ${mmdd}${versionLabel}`;
+  return version ? `Vocabulaire - Version ${version}` : "Vocabulaire";
 }
 
-function Sheet({ activity, framework, level, layout, examDate, version, fwColor, fwBadge, fwDesc }) {
+function Sheet({ activity, framework, level, layout, examDate, version, generation, fwColor, fwBadge, fwDesc }) {
   const [showKey, setShowKey] = useState(false);
-  const title = makeTitle(examDate, version);
+  const baseTitle = makeTitle(examDate, version);
+  const title = generation > 0 ? `${baseTitle} · i${generation}` : baseTitle;
   const versionColor = version === "A" ? "#0891b2" : "#7c3aed";
 
   return (
@@ -88,13 +89,13 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
         </div>
       </div>
 
-      <div id={`sheet-${version||"main"}`} style={{ padding:"26px 30px",fontFamily:"Georgia,serif" }}>
+      <div id={`sheet-${version||"main"}`} style={{ padding:"26px 30px",fontFamily:'"Times New Roman",serif' }}>
 
         {/* Title row */}
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18 }}>
           <div>
             <div style={{ fontSize:10,letterSpacing:"0.09em",textTransform:"uppercase",color:"var(--color-text-tertiary)",marginBottom:3,fontFamily:"sans-serif" }}>
-              Exercice à trous
+              Exercice à trous{generation > 0 ? ` · Itération ${generation}` : ""}
             </div>
             <div style={{ fontSize:20,fontWeight:700,letterSpacing:"0.01em" }}>{title}</div>
           </div>
@@ -148,21 +149,27 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
         )}
 
         {/* Word bank */}
-        {layout==="wordbank" && activity.wordBank?.length > 0 && (
-          <div style={{ background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,border:"0.5px solid var(--color-border-tertiary)" }}>
-            <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
-              Banque de mots — {activity.wordBank.length} mots
+        {layout==="wordbank" && activity.wordBank?.length > 0 && (() => {
+          const flatBank = activity.wordBank.flatMap(w =>
+            w.word.split(/,\s*/).map(t => t.trim()).filter(Boolean).map(t => ({ ...w, word:t }))
+          );
+          const colRows = Math.ceil(flatBank.length / 2);
+          return (
+            <div style={{ background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,border:"0.5px solid var(--color-border-tertiary)" }}>
+              <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
+                Banque de mots — {flatBank.length} mots
+              </div>
+              <div style={{ display:"grid",gridAutoFlow:"column",gridTemplateRows:`repeat(${colRows},auto)`,gridAutoColumns:"1fr",gap:"4px 16px" }}>
+                {flatBank.map((w,i)=>(
+                  <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                    {w.word}
+                    {w.isInfinitive && <span style={{ fontSize:9,verticalAlign:"super",marginLeft:2,fontFamily:"sans-serif",color:"var(--color-text-tertiary)" }}>inf.</span>}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div style={{ display:"grid",gridAutoFlow:"column",gridTemplateRows:"repeat(5,auto)",gridAutoColumns:"1fr",gap:"4px 16px" }}>
-              {activity.wordBank.map((w,i)=>(
-                <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                  {w.word}
-                  {w.isInfinitive && <span style={{ fontSize:9,verticalAlign:"super",marginLeft:2,fontFamily:"sans-serif",color:"var(--color-text-tertiary)" }}>inf.</span>}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Instructions */}
         <div style={{ fontSize:12,fontStyle:"italic",color:"var(--color-text-secondary)",marginBottom:14,fontFamily:"sans-serif" }}>
@@ -176,7 +183,7 @@ function Sheet({ activity, framework, level, layout, examDate, version, fwColor,
           {activity.segments.map((seg,i)=>
             seg.type==="text"
               ? <span key={i}>{seg.value}</span>
-              : <GapBlank key={i} answer={seg.answer} num={seg.num}/>
+              : <GapBlank key={i} num={seg.num}/>
           )}
         </div>
 
@@ -211,7 +218,7 @@ function printSheet(title) {
   const w = window.open("","_blank");
   w.document.write(`<html><head><title>${title}</title>
   <style>
-    body{font-family:Georgia,serif;padding:36px;max-width:680px;margin:0 auto;color:#111;font-size:14px;line-height:1.9}
+    body{font-family:"Times New Roman",serif;padding:36px;max-width:680px;margin:0 auto;color:#111;font-size:14px;line-height:1.9}
     hr{page-break-after:always;border:none;border-top:2px dashed #ccc;margin:40px 0}
     @media print{body{padding:0}hr{margin:20px 0}}
     sup{font-size:0.6em;font-weight:700;font-family:sans-serif}
@@ -290,6 +297,7 @@ export default function App() {
   const [contextLevel, setContextLevel] = useState(0);
   const [twoVersions, setTwoVersions] = useState(false);
   const [examDate,    setExamDate]    = useState("");
+  const [generation,  setGeneration]  = useState(0);
   const [activities,  setActivities]  = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [loadingMsg,  setLoadingMsg]  = useState("");
@@ -318,6 +326,7 @@ export default function App() {
     if (!topic.trim()) { setError("Please enter a topic."); return; }
     if (!vocab.trim()) { setError("Please enter vocabulary words."); return; }
     setError(""); setActivities(null); setLoading(true);
+    setGeneration(g => g + 1);
     const vocabList = vocab.split(/[\n,]+/).map(v=>v.trim()).filter(Boolean);
     const sentenceCount = Math.max(6, Math.ceil(maxGaps*(twoVersions?2.2:1.5)));
     const instr = framework==="CEFR" ? `niveau ${level} du CECRL (${fw.desc[level]})` : `ACTFL ${level} (${fw.desc[level]})`;
@@ -418,7 +427,7 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
     }
   };
 
-  const sharedSheetProps = { framework, level, layout, examDate, fwColor:fw.color, fwBadge:fw.badge, fwDesc:fw.desc[level] };
+  const sharedSheetProps = { framework, level, layout, examDate, generation, fwColor:fw.color, fwBadge:fw.badge, fwDesc:fw.desc[level] };
 
   return (
     <>
