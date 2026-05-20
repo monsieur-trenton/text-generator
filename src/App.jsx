@@ -42,11 +42,11 @@ function Toggle({ label, note, checked, onChange }) {
     </div>
   );
 }
+
 function GapBlank({ num }) {
   return (
-    <span style={{ margin:"0 3px",whiteSpace:"nowrap" }}>
-      <span style={{ fontFamily:"sans-serif",fontSize:"0.85em",fontWeight:600 }}>{num})</span>
-      <span style={{ fontFamily:"monospace",letterSpacing:"0.04em" }}>{"_".repeat(15)}</span>
+    <span style={{ whiteSpace:"nowrap",margin:"0 2px" }}>
+      {num})&nbsp;<span style={{ fontFamily:"monospace",letterSpacing:"0.05em" }}>{"_".repeat(15)}</span>
     </span>
   );
 }
@@ -54,20 +54,21 @@ function GapBlank({ num }) {
 function toMMDD(dateStr) {
   if (!dateStr) return null;
   const [, mm, dd] = dateStr.split("-");
-  return `${mm}${dd}`;
+  return `${mm}/${dd}`;
 }
 
-function makeTitle(examDate, version) {
+function makeTitle(examDate, version, topic) {
   const mmdd = toMMDD(examDate);
-  const versionLabel = version || "";
-  if (mmdd) return `Vocabulaire - ${mmdd}${versionLabel}`;
-  return version ? `Vocabulaire - Version ${version}` : "Vocabulaire";
+  if (mmdd) {
+    const v = version ? ` ${version}` : "";
+    return `Vocabulaire - ${mmdd}${v}`;
+  }
+  return topic ? `Vocabulaire - ${topic}` : "Vocabulaire";
 }
 
-function Sheet({ activity, framework, level, layout, examDate, version, generation, fwColor, fwBadge, fwDesc }) {
+function Sheet({ activity, framework, level, layout, examDate, version, topic, fwColor, fwBadge, fwDesc }) {
   const [showKey, setShowKey] = useState(false);
-  const baseTitle = makeTitle(examDate, version);
-  const title = generation > 0 ? `${baseTitle} · i${generation}` : baseTitle;
+  const title = makeTitle(examDate, version, topic);
   const versionColor = version === "A" ? "#0891b2" : "#7c3aed";
 
   return (
@@ -95,7 +96,7 @@ function Sheet({ activity, framework, level, layout, examDate, version, generati
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18 }}>
           <div>
             <div style={{ fontSize:10,letterSpacing:"0.09em",textTransform:"uppercase",color:"var(--color-text-tertiary)",marginBottom:3,fontFamily:"sans-serif" }}>
-              Exercice à trous{generation > 0 ? ` · Itération ${generation}` : ""}
+              Exercice à trous
             </div>
             <div style={{ fontSize:20,fontWeight:700,letterSpacing:"0.01em" }}>{title}</div>
           </div>
@@ -149,26 +150,21 @@ function Sheet({ activity, framework, level, layout, examDate, version, generati
         )}
 
         {/* Word bank */}
-        {layout==="wordbank" && activity.wordBank?.length > 0 && (() => {
-          const flatBank = activity.wordBank.flatMap(w =>
-            w.word.split(/,\s*/).map(t => t.trim()).filter(Boolean).map(t => ({ ...w, word:t }))
-          );
-          return (
-            <div style={{ background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,border:"0.5px solid var(--color-border-tertiary)" }}>
-              <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
-                Banque de mots — {flatBank.length} mots
-              </div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px" }}>
-                {flatBank.map((w,i)=>(
-                  <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                    {w.word}
-                    {w.isInfinitive && <span style={{ fontSize:9,verticalAlign:"super",marginLeft:2,fontFamily:"sans-serif",color:"var(--color-text-tertiary)" }}>inf.</span>}
-                  </span>
-                ))}
-              </div>
+        {layout==="wordbank" && activity.wordBank?.length > 0 && (
+          <div style={{ background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,border:"0.5px solid var(--color-border-tertiary)" }}>
+            <div style={{ fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"var(--color-text-tertiary)",marginBottom:7,fontFamily:"sans-serif" }}>
+              Banque de mots — {activity.wordBank.length} mots
             </div>
-          );
-        })()}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px" }}>
+              {activity.wordBank.map((w,i)=>(
+                <span key={i} style={{ fontSize:13,padding:"2px 6px",border:"0.5px solid var(--color-border-tertiary)",borderRadius:4,fontStyle:w.isInfinitive?"italic":"normal",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                  {w.word}
+                  {w.isInfinitive && <span style={{ fontSize:9,verticalAlign:"super",marginLeft:2,fontFamily:"sans-serif",color:"var(--color-text-tertiary)" }}>inf.</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Instructions */}
         <div style={{ fontSize:12,fontStyle:"italic",color:"var(--color-text-secondary)",marginBottom:14,fontFamily:"sans-serif" }}>
@@ -237,70 +233,52 @@ function extractJSON(raw) {
   return end === -1 ? text : text.slice(start, end + 1);
 }
 
-function getPriorLevel(framework, level) {
-  const levels = FRAMEWORKS[framework].levels;
-  const idx = levels.indexOf(level);
-  return levels[Math.max(0,idx-1)];
-}
-
-function buildSegments(text, gaps) {
-  let remaining = text;
+// Parse [GAP1], [GAP2] … markers that the AI embeds directly in the text.
+function buildSegments(markedText, gaps) {
+  const parts = markedText.split(/(\[GAP\d+\])/g);
   const segments = [];
-  let n = 1;
-  for (const gap of gaps) {
-    const needle = gap.original || gap.answer;
-    if (!needle) continue;
-    let idx = remaining.indexOf(needle);
-    let matchLen = needle.length;
-    if (idx === -1) {
-      idx = remaining.toLowerCase().indexOf(needle.toLowerCase());
+  for (const part of parts) {
+    const m = part.match(/^\[GAP(\d+)\]$/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const gap = gaps[n - 1];
+      if (gap) segments.push({ type:"gap", num:n, answer:gap.answer });
+    } else if (part) {
+      segments.push({ type:"text", value:part });
     }
-    if (idx === -1) continue;
-    if (idx > 0) segments.push({ type:"text",value:remaining.slice(0,idx) });
-    segments.push({ type:"gap",num:n++,answer:gap.answer });
-    remaining = remaining.slice(idx+matchLen);
   }
-  if (remaining) segments.push({ type:"text",value:remaining });
   return segments;
 }
 
-async function buildWordBank(gaps, poolSize, layout, framework, level, verbMode, articleMode, callAI) {
-  if (layout!=="wordbank") return [];
-  const correctEntries = gaps.map(g=>({ word:g.wordbank, isInfinitive:verbMode&&g.pos==="verb" }));
-  const extra = Math.max(0, poolSize - gaps.length);
-  let extraWords = [];
-  if (extra > 0) {
-    const correctWords = correctEntries.map(e=>e.word.toLowerCase());
-    const instr = `${framework} ${level}`;
-    const raw = await callAI(
-      `Generate ${extra} distractor words for a French word bank. Correct answers already present: ${correctWords.join(", ")}. Level: ${instr}. ${verbMode?"Verb distractors must be infinitives.":""} ${articleMode?"Noun distractors must be bare nouns (no article).":""} Do NOT duplicate: ${correctWords.join(", ")}. Return ONLY a JSON array: ["w1","w2"]`,
-      "JSON-only. No markdown.",
-      400
-    );
-    try { extraWords = JSON.parse(extractJSON(raw)).slice(0,extra).map(w=>({ word:w,isInfinitive:false })); }
-    catch { extraWords = []; }
-  }
-  return [...correctEntries,...extraWords].sort(()=>Math.random()-0.5);
+// Distractors come from the user's own vocab list (words not already used as gap answers).
+function buildWordBank(gaps, distractorCount, layout, vocabList, verbMode) {
+  if (layout !== "wordbank") return [];
+  const correctEntries = gaps.map(g => ({ word:g.wordbank, isInfinitive:verbMode && g.pos==="verb" }));
+  const usedLower = new Set(gaps.map(g => g.wordbank.toLowerCase()));
+  const distractors = vocabList
+    .filter(w => !usedLower.has(w.toLowerCase()))
+    .slice(0, distractorCount)
+    .map(w => ({ word:w, isInfinitive:false }));
+  return [...correctEntries, ...distractors].sort(() => Math.random() - 0.5);
 }
 
 export default function App() {
-  const [framework,   setFramework]   = useState("CEFR");
-  const [level,       setLevel]       = useState("B1");
-  const [topic,       setTopic]       = useState("");
-  const [vocab,       setVocab]       = useState("");
-  const [layout,      setLayout]      = useState("wordbank");
-  const [maxGaps,     setMaxGaps]     = useState(5);
-  const [poolSize,    setPoolSize]    = useState(10);
-  const [articleMode, setArticleMode] = useState(false);
-  const [verbMode,    setVerbMode]    = useState(false);
-  const [contextLevel, setContextLevel] = useState(0);
-  const [twoVersions, setTwoVersions] = useState(false);
-  const [examDate,    setExamDate]    = useState("");
-  const [generation,  setGeneration]  = useState(0);
-  const [activities,  setActivities]  = useState(null);
-  const [loading,     setLoading]     = useState(false);
-  const [loadingMsg,  setLoadingMsg]  = useState("");
-  const [error,       setError]       = useState("");
+  const [framework,      setFramework]      = useState("CEFR");
+  const [level,          setLevel]          = useState("B1");
+  const [topic,          setTopic]          = useState("");
+  const [vocab,          setVocab]          = useState("");
+  const [layout,         setLayout]         = useState("wordbank");
+  const [maxGaps,        setMaxGaps]        = useState(5);
+  const [distractorCount,setDistractorCount]= useState(5);
+  const [articleMode,    setArticleMode]    = useState(false);
+  const [verbMode,       setVerbMode]       = useState(false);
+  const [contextLevel,   setContextLevel]   = useState(0);
+  const [twoVersions,    setTwoVersions]    = useState(false);
+  const [examDate,       setExamDate]       = useState("");
+  const [activities,     setActivities]     = useState(null);
+  const [loading,        setLoading]        = useState(false);
+  const [loadingMsg,     setLoadingMsg]     = useState("");
+  const [error,          setError]          = useState("");
   const fw = FRAMEWORKS[framework];
 
   const callAI = async (userPrompt, system, maxTokens=2000) => {
@@ -325,43 +303,60 @@ export default function App() {
     if (!topic.trim()) { setError("Please enter a topic."); return; }
     if (!vocab.trim()) { setError("Please enter vocabulary words."); return; }
     setError(""); setActivities(null); setLoading(true);
-    setGeneration(g => g + 1);
     const vocabList = vocab.split(/[\n,]+/).map(v=>v.trim()).filter(Boolean);
     const sentenceCount = Math.max(6, Math.ceil(maxGaps*(twoVersions?2.2:1.5)));
     const instr = framework==="CEFR" ? `niveau ${level} du CECRL (${fw.desc[level]})` : `ACTFL ${level} (${fw.desc[level]})`;
 
     try {
       setLoadingMsg("Generating text and gaps…");
-      const articleNote = articleMode ? `ARTICLE CHALLENGE: For noun gaps, "original" includes the article (e.g. "le chien"), "wordbank" is the bare noun, "answer" is article+noun.` : "";
-      const verbNote    = verbMode    ? `CONJUGATION CHALLENGE: For verb gaps, "wordbank" is the infinitive, "answer" is the conjugated form in the text.` : "";
-      const versionNote = twoVersions
-        ? `TWO VERSIONS: Select TWO non-overlapping sets of ${maxGaps} gaps from the vocabulary — version_a_gaps and version_b_gaps. Each version must test DIFFERENT words so students seated together cannot share answers. If the vocabulary list is too short to fill both, reuse words but ensure the gap positions differ.`
-        : `Select up to ${maxGaps} vocabulary items as gaps.`;
 
-      const gapPrompt = `You are an expert French language teacher.
+      const articleNote = articleMode
+        ? `ARTICLE CHALLENGE: For noun gaps the [GAPn] marker replaces the full noun phrase including article (e.g. "le musée"). "answer" = article+noun, "wordbank" = bare noun.`
+        : "";
+      const verbNote = verbMode
+        ? `CONJUGATION CHALLENGE: For verb gaps, "wordbank" is the infinitive, "answer" is the conjugated form that appears in the text.`
+        : "";
+
+      const gapPrompt = twoVersions ? `You are an expert French language teacher.
 
 Topic: "${topic}"
 Proficiency: ${instr}
 Vocabulary: ${vocabList.join(", ")}
 Text length: ${sentenceCount} sentences
-${versionNote}
 ${articleNote}
 ${verbNote}
 
 Instructions:
-1. Write one coherent French text at the stated level, naturally using the vocabulary.
-2. ${twoVersions ? "Return two gap sets (version_a_gaps, version_b_gaps) — each a different subset of vocabulary items gapped." : `Return up to ${maxGaps} gaps.`}
-3. Each gap object: {"original":"...","answer":"...","wordbank":"...","pos":"verb|noun|adjective|other"}
+1. Write one coherent French text at the stated level using the vocabulary.
+2. Produce TWO versions of the gapped text. Each version uses a DIFFERENT set of ${maxGaps} vocabulary items as gaps, so seated neighbours cannot share answers.
+3. In each versioned text, replace every gapped word with a marker [GAP1], [GAP2], … in order. The rest of the text is identical between versions.
+4. Each gap object: {"answer":"word/phrase as it appears in the text","wordbank":"word for the bank","pos":"verb|noun|adjective|other"}
 
 Return ONLY valid JSON, no markdown:
-${twoVersions ? `{
-  "text": "...",
-  "version_a_gaps": [{...}],
-  "version_b_gaps": [{...}]
-}` : `{
-  "text": "...",
-  "gaps": [{...}]
-}`}`;
+{
+  "version_a_text": "French text with [GAP1] … [GAP${maxGaps}] markers",
+  "version_b_text": "Same French text with different [GAP1] … [GAP${maxGaps}] markers",
+  "version_a_gaps": [{"answer":"...","wordbank":"...","pos":"..."}],
+  "version_b_gaps": [{"answer":"...","wordbank":"...","pos":"..."}]
+}` : `You are an expert French language teacher.
+
+Topic: "${topic}"
+Proficiency: ${instr}
+Vocabulary: ${vocabList.join(", ")}
+Text length: ${sentenceCount} sentences
+${articleNote}
+${verbNote}
+
+Instructions:
+1. Write one coherent French text at the stated level using the vocabulary.
+2. Choose up to ${maxGaps} vocabulary items to gap. Replace each with [GAP1], [GAP2], … in order in the text.
+3. Each gap object: {"answer":"word/phrase as it appears in the text","wordbank":"word for the bank","pos":"verb|noun|adjective|other"}
+
+Return ONLY valid JSON, no markdown:
+{
+  "text": "French text with [GAP1], [GAP2] … markers in place of the gapped words",
+  "gaps": [{"answer":"...","wordbank":"...","pos":"..."}]
+}`;
 
       const raw = await callAI(gapPrompt, "JSON-only responder. No markdown, no explanation.", 3000);
       let parsed;
@@ -376,11 +371,16 @@ ${twoVersions ? `{
         "at exactly the same proficiency level as the exercise",
       ];
 
+      // Base text for context generation (strip markers)
+      const baseText = twoVersions
+        ? (parsed.version_a_text||"").replace(/\[GAP\d+\]/g, "___")
+        : (parsed.text||"").replace(/\[GAP\d+\]/g, "___");
+
       let context = null;
       if (contextLevel > 0) {
         setLoadingMsg("Generating mise en contexte…");
         const ctxRaw = await callAI(
-          `Create a "Mise en contexte" block in French for a gap-fill exercise. Topic: "${topic}". Exercise level: ${instr}. Text: "${parsed.text}".
+          `Create a "Mise en contexte" block in French for a gap-fill exercise. Topic: "${topic}". Exercise level: ${instr}. Text: "${baseText}".
 Write:
 1. "intro": 2–3 sentences in French written at a level that is ${contextLevelDescs[contextLevel]} — do NOT reveal gap answers.
 2. "glossary": 4–6 items — difficult words from the text, each with a short French definition (not a translation).
@@ -394,13 +394,11 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
       const hasArt  = g => articleMode && g.pos==="noun";
       const hasVerb = g => verbMode    && g.pos==="verb";
 
-      const makeActivity = async (gaps, label) => {
-        setLoadingMsg(`Building ${label ? "Version "+label : "activity"}…`);
-        const wordBank = await buildWordBank(gaps, poolSize, layout, framework, level, verbMode, articleMode, callAI);
+      const makeActivity = (markedText, gaps) => {
+        const wordBank = buildWordBank(gaps, distractorCount, layout, vocabList, verbMode);
         return {
-          fullText: parsed.text,
           gaps,
-          segments: buildSegments(parsed.text, gaps),
+          segments: buildSegments(markedText, gaps),
           wordBank,
           context,
           hasArticleChallenge: gaps.some(hasArt),
@@ -409,14 +407,12 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
       };
 
       if (twoVersions) {
-        const [actA, actB] = await Promise.all([
-          makeActivity(parsed.version_a_gaps||[], "A"),
-          makeActivity(parsed.version_b_gaps||[], "B"),
-        ]);
-        setActivities({ a:actA, b:actB });
+        setActivities({
+          a: makeActivity(parsed.version_a_text||"", parsed.version_a_gaps||[]),
+          b: makeActivity(parsed.version_b_text||"", parsed.version_b_gaps||[]),
+        });
       } else {
-        const actMain = await makeActivity(parsed.gaps||[], null);
-        setActivities({ main:actMain });
+        setActivities({ main: makeActivity(parsed.text||"", parsed.gaps||[]) });
       }
 
     } catch(e) {
@@ -426,7 +422,7 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
     }
   };
 
-  const sharedSheetProps = { framework, level, layout, examDate, generation, fwColor:fw.color, fwBadge:fw.badge, fwDesc:fw.desc[level] };
+  const sharedSheetProps = { framework, level, layout, examDate, topic, fwColor:fw.color, fwBadge:fw.badge, fwDesc:fw.desc[level] };
 
   return (
     <>
@@ -447,7 +443,7 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
           </div>
         </div>
 
-        <Alert>Preview mode — Claude handles text and distractor logic. The GitHub Pages version calls CamemBERT directly.</Alert>
+        <Alert>Preview mode — Claude handles text and gap logic. The GitHub Pages version calls CamemBERT directly.</Alert>
 
         {/* Framework */}
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
@@ -510,7 +506,7 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
               style={{ width:"100%",fontSize:13 }}/>
             {examDate && (
               <div style={{ fontSize:11,color:"var(--color-text-tertiary)",marginTop:4 }}>
-                Title: <strong>{makeTitle(examDate, twoVersions?"A":null)}</strong>
+                Title: <strong>{makeTitle(examDate, twoVersions?"A":null, topic)}</strong>
               </div>
             )}
           </div>
@@ -541,13 +537,13 @@ Return ONLY JSON: {"intro":"...","glossary":[{"word":"...","definition":"..."}]}
             </div>
             <div>
               <div style={{ fontSize:12,color:"var(--color-text-secondary)",marginBottom:7,fontWeight:500,display:"flex",justifyContent:"space-between" }}>
-                <span>Word bank pool size</span>
-                <span style={{ fontSize:15,fontWeight:700,color:fw.color }}>{poolSize}</span>
+                <span>Distractors</span>
+                <span style={{ fontSize:15,fontWeight:700,color:fw.color }}>{distractorCount}</span>
               </div>
-              <input type="range" min={5} max={20} step={1} value={poolSize}
-                onChange={e=>{setPoolSize(+e.target.value);setActivities(null);}} style={{ width:"100%" }}/>
+              <input type="range" min={0} max={10} step={1} value={distractorCount}
+                onChange={e=>{setDistractorCount(+e.target.value);setActivities(null);}} style={{ width:"100%" }}/>
               <div style={{ display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--color-text-tertiary)",marginTop:3 }}>
-                <span>5 (easier)</span><span>20 (harder)</span>
+                <span>0</span><span>10</span>
               </div>
             </div>
           </div>
