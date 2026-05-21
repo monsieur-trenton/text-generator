@@ -284,14 +284,9 @@ export default function App() {
   const callAI = async (userPrompt, system, maxTokens=2000) => {
     const body = { model:"claude-haiku-4-5-20251001", max_tokens:maxTokens, messages:[{ role:"user", content:userPrompt }] };
     if (system) body.system = system;
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/generate", {
       method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
+      headers:{ "Content-Type":"application/json" },
       body:JSON.stringify(body),
     });
     const data = await res.json();
